@@ -1,0 +1,123 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+'''
+Create a mininet based network for the botnet
+'''
+
+import time
+
+from mininet.topo import Topo
+from mininet.net import Mininet
+from mininet.node import Node
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+from mininet.link import TCLink
+
+
+class Gateway(Node):
+    "Node that does ip forwarding"
+    def config(self, **params):
+        super(Gateway, self).config(**params)
+        self.cmd("sysctl net.ipv4.ip_forward=1")
+
+    def terminate(self):
+        self.cmd("sysctl net.ipv4.ip_forward=0")
+        super(Gateway, self).terminate()
+
+
+def gateway_nets(topo, gateway_id, netmasks, node_counts):
+    gateway = topo.addNode(
+        gateway_id,
+        cls=Gateway,
+        ip=f"{netmasks[0]}.0.0.{node_counts[netmasks[0]]['switches'] + 1}/8"
+    )
+    switches = []
+    for i, netmask in enumerate(netmasks):
+        node_counts[netmask]["switches"] += 1
+        switches.append(topo.addSwitch(f"s{gateway_id[1:]}{i}"))
+    for i, switch in enumerate(switches):
+        topo.addLink(
+            switch,
+            gateway,
+            infName2=f"{gateway_id}-eth{i + 1}",
+            params2={
+                'ip': f"{netmasks[i]}.0.0.{node_counts[netmasks[i]]['switches']}/8"
+            }
+        )
+    return switches
+
+
+class ThreeNetTopo(Topo):
+    def build(self, **opts):
+        node_counts = {nm: {"hosts": 0, "switches": 0} for nm in opts['netmasks']}
+        botnet_switch = gateway_nets(
+            self, "r0", opts['netmasks'][:2], node_counts
+        )
+        add_hosts(
+            self, botnet_switch[1], opts['netmasks'][1], opts['num_bots'] + 1,
+            "b", node_counts
+        )
+        # add_hosts(self, botnet_switch[0], opts['netmasks'][0], 1, "u", node_counts)
+        user_switch = gateway_nets(
+            self, "r1", [opts['netmasks'][i] for i in [0, 2]], node_counts
+        )
+        add_hosts(self, user_switch[1], opts['netmasks'][2], 1, "u", node_counts)
+        sdn_nm = opts['netmasks'][0]
+        node_counts[sdn_nm]['switches'] += 1
+        sdn_switch = self.addSwitch(f"s{node_counts[sdn_nm]['switches']}")
+        self.addLink(sdn_switch, botnet_switch[0])
+        self.addLink(sdn_switch, user_switch[0])
+        node_counts[sdn_nm]['hosts'] += 1
+        target = self.addHost(
+            f"t{node_counts[sdn_nm]['hosts']}",
+            ip=f"{sdn_nm}.0.1.{node_counts[sdn_nm]['hosts']}/8",
+            defaultRoute=f"via 10.0.0.3"
+        )
+        self.addLink(
+            target,
+            sdn_switch,
+            # **{
+            #     "bw": 10,
+            #     "delay": "5ms",
+            #     "loss": 0,
+            #     "max_queue_size": 1000,
+            #     "use_htb": True
+            # }
+        )
+
+
+def add_hosts(topo, switch, netmask, num_nodes, id_tag, node_counts):
+    for i in range(num_nodes):
+        node_counts[netmask]['hosts'] += 1
+        h = topo.addHost(
+            f"{id_tag}{i}",
+            ip=f"{netmask}.0.1.{i}/8",
+            defaultRoute=f"via {netmask}.0.0.{node_counts[netmask]['switches']}"
+        )
+        topo.addLink(h, switch)
+
+
+def test_threenet(num_bots):
+    topo = ThreeNetTopo(netmasks=["10", "11", "12"], num_bots=num_bots)
+    net = Mininet(topo=topo, link=TCLink)
+    net.start()
+    # net['t1'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
+    # time.sleep(1)
+    # net['u0'].cmdPrint(f"netsurf http://{net['t1'].IP()}:5000/ &")
+    # time.sleep(1)
+    # net['b0'].cmdPrint(f"./botnet_controller -n {num_bots} -t {net['t1'].IP()} &")
+    # time.sleep(1)
+    # for i in range(1, num_bots + 1):
+    #     net[f"b{i}"].cmdPrint(f"./bot -c {net['b0'].IP()} &")
+    info("*** Routing table on the gateway:\n")
+    info(net['r0'].cmd("route"))
+    info(net['r1'].cmd("route"))
+    CLI(net)
+    net.stop()
+
+
+if __name__ == '__main__':
+    setLogLevel('info')
+    # ddos()
+    test_threenet(1)
