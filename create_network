@@ -5,7 +5,10 @@
 Create a mininet based network for the botnet
 '''
 
+import sys
 import time
+
+import numpy as np
 
 from mininet.topo import Topo
 from mininet.net import Mininet
@@ -70,19 +73,58 @@ def run_network(num_bots):
         controller=RemoteController
     )
     net.start()
-    info("*** Starting web server on target\n")
-    net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
-    time.sleep(1)
-    info("*** User browsing web service\n")
-    net['u0'].cmdPrint(f"netsurf http://{net['t0'].IP()}:5000/ &")
-    time.sleep(1)
-    info("*** Starting botnet controller\n")
-    net['b0'].cmdPrint(f"./botnet_controller -n {num_bots} -t {net['t0'].IP()} &")
-    time.sleep(1)
-    info("*** Starting botnet attack on the target")
-    for i in range(1, num_bots + 1):
-        net[f"b{i}"].cmdPrint(f"./bot -c {net['b0'].IP()} &")
-    CLI(net)
+    finish_time = time.time() + 3000
+    if "--train" in sys.argv:
+        finish_time = time.time() + 3000
+        for host in net.hosts:
+            host.cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
+        time.sleep(3)
+    if "--attack" in sys.argv:
+        info("*** Starting web server on target\n")
+        net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
+        time.sleep(1)
+        info("*** User browsing web service\n")
+        net['u0'].cmdPrint(f"netsurf http://{net['t0'].IP()}:5000/ &")
+        time.sleep(1)
+        info("*** Starting botnet controller\n")
+        net['b0'].cmdPrint(f"./botnet_controller -n {num_bots} -t {net['t0'].IP()} &")
+        time.sleep(1)
+        info("*** Starting botnet attack on the target\n")
+        for i in range(1, num_bots + 1):
+            net[f"b{i}"].cmdPrint(f"./bot -c {net['b0'].IP()} &")
+    elif "--all-attack" in sys.argv:
+        info("*** Everyone attacking the target\n")
+        net['b0'].cmdPrint(f"./botnet_controller -n {len(net.hosts) - 1} -t {net['t0'].IP()} &")
+        for host in net.hosts:
+            if host is not net['b0']:
+                host.cmd(f"./bot -c {net['b0'].IP()} &")
+        while time.time() < finish_time:
+            time.sleep(1)
+    elif "--normal" in sys.argv:
+        info("*** Normal activity\n")
+        while time.time() < finish_time:
+            host = net.hosts[
+                int(np.round(np.random.uniform(len(net.hosts)))) - 1
+            ]
+            random_host_ip = net.hosts[
+                int(np.round(np.random.uniform(len(net.hosts)))) - 1
+            ].IP()
+            if np.random.choice(range(1, 100)) < 95:
+                info("*** TCP activity\n")
+                host.cmd(f"curl {random_host_ip}:5000")
+            else:
+                info("*** ICMP activity\n")
+                host.cmd(f"ping -c1 {random_host_ip}")
+            time.sleep(np.random.uniform(0, 1))
+    else:
+        info("*** Starting web server on target\n")
+        net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
+        time.sleep(1)
+        info("*** User browsing web service\n")
+        net['u0'].cmdPrint(f"netsurf http://{net['t0'].IP()}:5000/ &")
+        time.sleep(1)
+    if "--cli" in sys.argv:
+        CLI(net)
     net.stop()
 
 if __name__ == '__main__':

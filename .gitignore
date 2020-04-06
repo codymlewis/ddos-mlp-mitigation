@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 tags
 Session.vim
+pox/
+pox/*
+pox.py
+model.h5
+training_data.txt
