@@ -2,17 +2,16 @@
 # -*- coding: utf-8 -*-
 
 '''
-The controller of the network.
+The controller of the network. This also detects DDoS attacks.
 '''
 
 import sys
 import time
 
+import numpy as np
+
 import tensorflow as tf
 from tensorflow import keras
-
-import numpy as np
-from minisom import MiniSom
 
 import pox.lib.packet as pac
 from pox.boot import boot
@@ -41,6 +40,9 @@ IPV6_PROTOCOLS = {
 }
 
 class Flow:
+    '''
+    A class for flows through the network
+    '''
     def __init__(self, src, dst, comm_prot, packets, amount_bytes):
         self.src = src
         self.dst = dst
@@ -54,6 +56,10 @@ class Flow:
         return "{} -> {}: {}".format(self.src, self.dst, self.comm_prot)
 
     def is_pair(self, other):
+        '''
+        Find whether this is a pair flow with the other one
+        :param other Another flow
+        '''
         p = self.src == other.dst
         q = self.dst == other.src
         v = self.comm_prot == other.comm_prot
@@ -68,11 +74,17 @@ class Flow:
         return False
 
     def update(self, packets, amount_bytes):
+        '''
+        Update the amount of packets and bytes involved in this flow
+        :param packets Number of packets to add to this flow
+        :param amount_bytes Number of bytes to add to this flow
+        '''
         self.time_last_used = time.time()
         self.packets += packets
         self.bytes += amount_bytes
 
 class Controller(object):
+    '''A controller that can detect attacks or generate data on flows'''
     def __init__(self, connection, gen_data, label, detect, interval=5.0, clean_interval=30):
         self.connection = connection
         connection.addListeners(self)
@@ -94,6 +106,11 @@ class Controller(object):
             self.model = keras.models.load_model('model.h5')
 
     def resend_packet(self, packet_in, out_port):
+        '''
+        Pass the packet from this switch on to the next port
+        :param packet_in The packet to pass
+        :param out_port The port to pass to
+        '''
         msg = of.ofp_packet_out()
         msg.data = packet_in
         action = of.ofp_action_output(port=out_port)
@@ -101,6 +118,11 @@ class Controller(object):
         self.connection.send(msg)
 
     def act_like_switch(self, packet, packet_in):
+        '''
+        Act like a switch by learning the mappings between the MACs and ports
+        :param packet The packet processed at this point
+        :param packet_in The packet to pass
+        '''
         if self.detect:
             prediction = np.round(self.model.predict([self.calc_tuple()])[0][0])
             LOG.debug("Prediction: %s", prediction)
@@ -136,7 +158,9 @@ class Controller(object):
                 self.resend_packet(packet_in, of.OFPP_ALL)
 
     def calc_tuple(self):
-        interval = time.time() - self.time_started
+        '''
+        Calculate the six-tupe for DDoS detection
+        '''
         amount_packets = []
         amount_bytes = []
         durations = []
@@ -159,10 +183,10 @@ class Controller(object):
                 if flow.is_pair(other_flow):
                     num_growing_pair_flows += 1
         return [
-            np.median(amount_packets) if len(amount_packets) else 0,
-            np.median(amount_bytes) if len(amount_bytes) else 0,
-            np.median(durations) if len(amount_bytes) else 0,
-            ((2 * num_pair_flows) / num_flows) if num_flows > 0 else 0,
+            np.median(amount_packets) if amount_packets else 0.0,
+            np.median(amount_bytes) if amount_bytes else 0.0,
+            np.median(durations) if amount_bytes else 0.0,
+            ((2 * num_pair_flows) / num_flows) if num_flows > 0 else 0.0,
             (num_growing_flows - (2 * num_growing_pair_flows) / self.interval),
             len(self.growing_ports) / self.interval,
         ]
@@ -175,6 +199,9 @@ class Controller(object):
         self.growing_ports = set()
 
     def write_data(self):
+        '''
+        Write the current six-tuple and label to a data file
+        '''
         six_tuple = self.calc_tuple()
         six_tuple.append(self.label)
         LOG.debug("Writing some training data")
@@ -184,6 +211,9 @@ class Controller(object):
         LOG.debug("Written.")
 
     def clean_flows(self):
+        '''
+        Clean the flow table
+        '''
         current_time = time.time()
         del_indices = []
         for flow in self.flows.values():
@@ -193,6 +223,10 @@ class Controller(object):
             del self.flows[del_index]
 
     def _handle_PacketIn(self, event):
+        '''
+        Handle a packet in
+        :param event Event that triggered this
+        '''
         packet = event.parsed
         if not packet.parsed:
             LOG.warning("Ignoring incomplete packet")
@@ -202,7 +236,14 @@ class Controller(object):
 
 
 def launch():
+    '''
+    Launch this controller
+    '''
     def start_switch(event):
+        '''
+        Start up the swithc
+        :param event Event that triggered this
+        '''
         LOG.debug("Controlling %s with this", (event.connection,))
         Controller(
             event.connection,
