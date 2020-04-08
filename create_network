@@ -73,19 +73,12 @@ def run_network(num_bots):
         controller=RemoteController
     )
     net.start()
-    finish_time = time.time() + 3000
+    finish_time = time.time() + 36_000
     if "--train" in sys.argv:
-        finish_time = time.time() + 3000
         for host in net.hosts:
             host.cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
         time.sleep(3)
     if "--attack" in sys.argv:
-        info("*** Starting web server on target\n")
-        net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
-        time.sleep(1)
-        info("*** User browsing web service\n")
-        net['u0'].cmdPrint(f"netsurf http://{net['t0'].IP()}:5000/ &")
-        time.sleep(1)
         info("*** Starting botnet controller\n")
         net['b0'].cmdPrint(f"./botnet_controller -n {num_bots} -t {net['t0'].IP()} &")
         time.sleep(1)
@@ -98,8 +91,7 @@ def run_network(num_bots):
         for host in net.hosts:
             if host is not net['b0']:
                 host.cmd(f"./bot -c {net['b0'].IP()} &")
-        while time.time() < finish_time:
-            time.sleep(1)
+        time.sleep(finish_time - time.time())
     elif "--normal" in sys.argv:
         info("*** Normal activity\n")
         while time.time() < finish_time:
@@ -115,7 +107,6 @@ def run_network(num_bots):
             else:
                 info("*** ICMP activity\n")
                 host.cmd(f"ping -c1 {random_host_ip}")
-            time.sleep(np.random.uniform(0, 1))
     else:
         info("*** Starting web server on target\n")
         net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")

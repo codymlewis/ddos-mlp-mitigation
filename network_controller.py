@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 '''
@@ -13,16 +13,16 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
-import pox.lib.packet as pac
-from pox.boot import boot
-from pox.core import core
-from pox.lib.recoco import Timer
+import pox3.lib.packet as pac
+from pox3.boot import boot
+from pox3.core import core
+from pox3.lib.recoco import Timer
 
-import pox.openflow.libopenflow_01 as of
+import pox3.openflow.libopenflow_01 as of
 
 
 if __name__ != "__main__":
-    import pox.forwarding.l2_learning as l2l
+    import pox3.forwarding.l2_learning as l2l
     LOG = core.getLogger()
 
 IPV4_PROTOCOLS = {
@@ -44,8 +44,8 @@ class Flow:
     A class for flows through the network
     '''
     def __init__(self, src, dst, comm_prot, packets, amount_bytes):
-        self.src = src
-        self.dst = dst
+        self.src = str(src)
+        self.dst = str(dst)
         self.comm_prot = comm_prot
         self.packets = packets
         self.bytes = amount_bytes
@@ -166,7 +166,7 @@ class Controller(object):
         durations = []
         current_time = time.time()
         num_pair_flows = float(0)
-        all_flows = self.flows.values()
+        all_flows = list(self.flows.values())
         num_flows = float(len(all_flows))
         for i, flow in enumerate(all_flows):
             amount_packets.append(flow.packets)
@@ -175,7 +175,7 @@ class Controller(object):
             for other_flow in all_flows[i + 1:]:
                 if flow.is_pair(other_flow):
                     num_pair_flows += 1
-        all_growing_flows = self.growing_flows.values()
+        all_growing_flows = list(self.growing_flows.values())
         num_growing_flows = len(all_growing_flows)
         num_growing_pair_flows = 0
         for i, flow in enumerate(all_growing_flows):
@@ -255,20 +255,29 @@ def launch():
 
 if __name__ == '__main__':
     if "--train" in sys.argv:
-        data, bin_labels = (lambda x: (x[:, :6], x[:, 6]))(np.loadtxt("training_data.txt"))
-        labels = np.array([[1, 0] if l == 0 else [0, 1] for l in bin_labels])
+        data, labels_bin = (lambda x: (x[:, :6], x[:, 6]))(np.loadtxt("training_data.txt"))
+        labels = np.array([[1, 0] if l == 0 else [0, 1] for l in labels_bin])
         inputs = keras.Input(shape=(6,))
-        x = keras.layers.Dense(10, activation=tf.nn.relu)(inputs)
-        x = keras.layers.Dense(10, activation=tf.nn.relu)(x)
+        x = keras.layers.Dense(100, activation=tf.nn.relu)(inputs)
+        x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
+        x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
         outputs = keras.layers.Dense(2, activation=tf.nn.softmax)(x)
         model = keras.Model(inputs=inputs, outputs=outputs)
         model.compile(
-            optimizer="RMSProp",
-            loss=keras.losses.CategoricalCrossentropy()
+            optimizer="Adam",
+            loss=keras.losses.BinaryCrossentropy(),
+            metrics=["accuracy"]
         )
-        history = model.fit(x=data, y=labels, epochs=500, verbose=1)
+        history = model.fit(
+            x=data,
+            y=labels,
+            epochs=500,
+            verbose=1,
+            validation_split=0.2,
+            callbacks=[keras.callbacks.EarlyStopping(patience=5)]
+        )
         print("Reached loss: {}".format(history.history['loss'][-1]))
         model.save("model.h5")
         print("Saved model as model.h5")
     else:
-        boot(["log.level", "--DEBUG", "network_controller"])
+        boot(["network_controller"])
