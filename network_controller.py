@@ -256,8 +256,8 @@ def launch():
 
 if __name__ == '__main__':
     if "--train" in sys.argv:
-        data, labels_bin = (lambda x: (x[:, :6], x[:, 6]))(np.loadtxt("training_data.txt"))
-        labels = np.array([[1, 0] if l == 0 else [0, 1] for l in labels_bin])
+        data, lbls = (lambda x: (x[:, :6], x[:, 6]))(np.loadtxt("training_data.txt"))
+        labels = np.array([[1, 0] if l == 0 else [0, 1] for l in lbls])
         inputs = keras.Input(shape=(6,))
         x = keras.layers.Dense(100, activation=tf.nn.relu)(inputs)
         x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
@@ -277,8 +277,9 @@ if __name__ == '__main__':
             validation_split=0.2,
             callbacks=[keras.callbacks.EarlyStopping(patience=5)]
         )
-        print("Reached loss: {}".format(history.history['loss'][-1]))
-        model.save("model.h5")
-        print("Saved model as model.h5")
+        print(f"Reached loss: {history.history['loss'][-1]}")
+        fn = "model.h5"
+        model.save(fn)
+        print("Saved model as {fn}")
     else:
         boot(["network_controller"])
