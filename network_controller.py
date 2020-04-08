@@ -280,6 +280,6 @@ if __name__ == '__main__':
         print(f"Reached loss: {history.history['loss'][-1]}")
         fn = "model.h5"
         model.save(fn)
-        print("Saved model as {fn}")
+        print(f"Saved model as {fn}")
     else:
         boot(["network_controller"])
