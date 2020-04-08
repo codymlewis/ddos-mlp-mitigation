@@ -203,12 +203,13 @@ class Controller(object):
         Write the current six-tuple and label to a data file
         '''
         six_tuple = self.calc_tuple()
-        six_tuple.append(self.label)
-        LOG.debug("Writing some training data")
-        LOG.debug("Current tuple: %s", six_tuple)
-        with open("training_data.txt", "a") as f:
-            f.write(" ".join(map(str, six_tuple)) + "\n")
-        LOG.debug("Written.")
+        if six_tuple != [0 for _ in range(6)]:
+            six_tuple.append(self.label)
+            LOG.debug("Writing some training data")
+            LOG.debug("Current tuple: %s", six_tuple)
+            with open("training_data.txt", "a") as f:
+                f.write(" ".join(map(str, six_tuple)) + "\n")
+            LOG.debug("Written.")
 
     def clean_flows(self):
         '''
