@@ -1,5 +1,5 @@
-# DDoS Autoencoder
-A combination of SDN and a neural network autoencoder that results in the
+# DDoS Autoencoder Mitigator
+A combination of SDN and an autoencoder neural network that results in the
 mitigation of context attacks
 
 ## Requirements
