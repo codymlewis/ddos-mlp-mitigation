@@ -1,5 +1,5 @@
-# DDoS Autoencoder Mitigator
-A combination of SDN and an autoencoder neural network that results in the
+# DDoS MLP Mitigator
+A combination of SDN and a multi-layer perceptron neural network that results in the
 mitigation of context attacks
 
 ## Requirements
@@ -34,7 +34,7 @@ Then start the network in attack interactions training mode:
 ./create_network --all-attack
 ```
 
-## Training the Autoencoder
+## Training the MLP
 Simply run the following:
 ```
 ./network_controller.py --train
