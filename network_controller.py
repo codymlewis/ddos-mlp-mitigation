@@ -3,6 +3,8 @@
 
 '''
 The controller of the network. This also detects DDoS attacks.
+
+Cody Lewis
 '''
 
 import sys
@@ -22,7 +24,6 @@ import pox3.openflow.libopenflow_01 as of
 
 
 if __name__ != "__main__":
-    import pox3.forwarding.l2_learning as l2l
     LOG = core.getLogger()
 
 IPV4_PROTOCOLS = {
@@ -98,7 +99,7 @@ class Controller(object):
         self.interval = interval
         if gen_data:
             self.data_timer = Timer(interval, self.write_data, recurring=True)
-        self.growth_timer = Timer(interval, self.detect_growth, recurring=True)
+        self.growth_timer = Timer(interval, self.reset_growth, recurring=True)
         self.clean_interval = clean_interval
         self.clean_timer = Timer(clean_interval, self.clean_flows, recurring=True)
         self.detect = detect
@@ -191,7 +192,7 @@ class Controller(object):
             len(self.growing_ports) / self.interval,
         ]
 
-    def detect_growth(self):
+    def reset_growth(self):
         '''
         Reset variables for detecting growth of them
         '''
@@ -219,7 +220,7 @@ class Controller(object):
         del_indices = []
         for flow in self.flows.values():
             if (current_time - flow.time_last_used) > self.clean_interval:
-               del_indices.append(str(flow))
+                del_indices.append(str(flow))
         for del_index in del_indices:
             del self.flows[del_index]
 
