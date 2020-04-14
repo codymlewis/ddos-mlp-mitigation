@@ -1,6 +1,6 @@
 # DDoS MLP Mitigator
 A combination of SDN and a multi-layer perceptron neural network that results in the
-mitigation of context attacks
+mitigation of DDoS attacks
 
 ## Requirements
 - python3

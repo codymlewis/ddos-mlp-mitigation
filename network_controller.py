@@ -254,6 +254,7 @@ def launch():
         )
     core.openflow.addListenerByName("ConnectionUp", start_switch)
 
+
 if __name__ == '__main__':
     if "--train" in sys.argv:
         data, lbls = (lambda x: (x[:, :6], x[:, 6]))(np.loadtxt("training_data.txt"))
