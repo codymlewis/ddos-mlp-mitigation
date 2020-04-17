@@ -12,7 +12,7 @@ import numpy as np
 
 from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.node import Controller, Node, OVSSwitch, RemoteController
+from mininet.node import OVSSwitch, RemoteController
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
 from mininet.link import TCLink
@@ -73,27 +73,26 @@ def run_network(num_bots):
         controller=RemoteController
     )
     net.start()
-    finish_time = time.time() + 36_000
+    finish_time = time.time() + 3_600
     if "--train" in sys.argv:
         for host in net.hosts:
             host.cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")
         time.sleep(3)
+        print(f"Training will finish at {time.ctime(finish_time)}")
     if "--attack" in sys.argv:
         info("*** Starting botnet controller\n")
         net['b0'].cmdPrint(f"./botnet_controller -n {num_bots} -t {net['t0'].IP()} &")
         time.sleep(1)
         info("*** Starting botnet attack on the target\n")
         for i in range(1, num_bots + 1):
-            net[f"b{i}"].cmdPrint(f"./bot -c {net['b0'].IP()} &")
-    elif "--all-attack" in sys.argv:
-        info("*** Everyone attacking the target\n")
-        net['b0'].cmdPrint(f"./botnet_controller -n {len(net.hosts) - 1} -t {net['t0'].IP()} &")
-        for host in net.hosts:
-            if host is not net['b0']:
-                host.cmd(f"./bot -c {net['b0'].IP()} &")
-        time.sleep(finish_time - time.time())
+            net[f"b{i}"].cmd(f"./bot -c {net['b0'].IP()} &")
+        if "--train" in sys.argv:
+            info("*** Waiting for training to finish")
+            time.sleep(finish_time - time.time())
     elif "--normal" in sys.argv:
         info("*** Normal activity\n")
+        tcp = 0
+        icmp = 0
         while time.time() < finish_time:
             host = net.hosts[
                 int(np.round(np.random.uniform(len(net.hosts)))) - 1
@@ -102,11 +101,13 @@ def run_network(num_bots):
                 int(np.round(np.random.uniform(len(net.hosts)))) - 1
             ].IP()
             if np.random.choice(range(1, 100)) < 95:
-                info("*** TCP activity\n")
+                tcp += 1
                 host.cmd(f"curl {random_host_ip}:5000")
             else:
-                info("*** ICMP activity\n")
+                icmp += 1
                 host.cmd(f"ping -c1 {random_host_ip}")
+            print(f"\rTCP: {tcp}, ICMP: {icmp}", end="")
+            time.sleep(np.random.uniform(0.25, 5))
     else:
         info("*** Starting web server on target\n")
         net['t0'].cmdPrint("export FLASK_APP=WebServer.py && flask run --host=0.0.0.0 &")

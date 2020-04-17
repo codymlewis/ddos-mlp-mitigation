@@ -86,7 +86,7 @@ class Flow:
 
 class Controller(object):
     '''A controller that can detect attacks or generate data on flows'''
-    def __init__(self, connection, gen_data, label, detect, interval=5.0, clean_interval=30):
+    def __init__(self, connection, gen_data, label, detect, interval=0.5, clean_interval=30):
         self.connection = connection
         connection.addListeners(self)
         self.label = label
@@ -105,6 +105,7 @@ class Controller(object):
         self.detect = detect
         if detect:
             self.model = keras.models.load_model('model.h5')
+            self.interval = time.time()
 
     def resend_packet(self, packet_in, out_port):
         '''
@@ -125,7 +126,11 @@ class Controller(object):
         :param packet_in The packet to pass
         '''
         if self.detect:
-            prediction = np.round(self.model.predict([self.calc_tuple()])[0][0])
+            self.interval = time.time() - self.interval
+            six_tuple = [self.calc_tuple()]
+            LOG.debug("Six-tuple: %s", six_tuple[0])
+            prediction = np.round(self.model.predict(six_tuple)[0][0])
+            self.interval = time.time()
             LOG.debug("Prediction: %s", prediction)
             if prediction == 1.0:
                 LOG.debug("Attack detected!")
@@ -188,7 +193,7 @@ class Controller(object):
             np.median(amount_bytes) if amount_bytes else 0.0,
             np.median(durations) if amount_bytes else 0.0,
             ((2 * num_pair_flows) / num_flows) if num_flows > 0 else 0.0,
-            (num_growing_flows - (2 * num_growing_pair_flows) / self.interval),
+            (num_growing_flows - (2 * num_growing_pair_flows)) / self.interval,
             len(self.growing_ports) / self.interval,
         ]
 
@@ -255,6 +260,10 @@ def launch():
         )
     core.openflow.addListenerByName("ConnectionUp", start_switch)
 
+def dense_norm_dropout(x):
+    x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
+    x = keras.layers.BatchNormalization()(x)
+    return keras.layers.Dropout(0.5)(x)
 
 if __name__ == '__main__':
     if "--train" in sys.argv:
@@ -262,7 +271,8 @@ if __name__ == '__main__':
         labels = np.array([[1, 0] if l == 0 else [0, 1] for l in lbls])
         inputs = keras.Input(shape=(6,))
         x = keras.layers.Dense(100, activation=tf.nn.relu)(inputs)
-        x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
+        x = dense_norm_dropout(x)
+        x = dense_norm_dropout(x)
         x = keras.layers.Dense(100, activation=tf.nn.relu)(x)
         outputs = keras.layers.Dense(2, activation=tf.nn.softmax)(x)
         model = keras.Model(inputs=inputs, outputs=outputs)
@@ -277,11 +287,14 @@ if __name__ == '__main__':
             epochs=500,
             verbose=1,
             validation_split=0.2,
-            callbacks=[keras.callbacks.EarlyStopping(patience=5)]
+            callbacks=[keras.callbacks.EarlyStopping(patience=3)]
         )
         print(f"Reached loss: {history.history['loss'][-1]}")
         fn = "model.h5"
         model.save(fn)
         print(f"Saved model as {fn}")
     else:
-        boot(["network_controller"])
+        boot(
+            (["log.level", "--DEBUG"] if "--debug" in sys.argv else []) +
+            ["network_controller"]
+        )
